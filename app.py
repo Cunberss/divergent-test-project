@@ -1,3 +1,5 @@
+import json
+
 from flask import Flask, jsonify, abort
 from typing import Tuple
 
@@ -5,67 +7,62 @@ app = Flask(__name__)
 
 
 def data_loader() -> Tuple[dict, dict]:
-    """
-    Функция загружает данные из json файлов и преобразует их в dict.
-    Функция не должна нарушать изначальную структуру данных.
-    """
-    return {}, {}
+    try:
+        with open('data/posts.json', 'r', encoding='utf-8') as file:
+            posts_data = json.load(file)['posts']
+    except FileNotFoundError:
+        posts_data = {}
+    try:
+        with open('data/comments.json', 'r', encoding='utf-8') as file:
+            comments_data = json.load(file)['comments']
+    except FileNotFoundError:
+        comments_data = {}
+    return posts_data, comments_data
 
 
 @app.route("/")
 def get_posts():
-    """
-    На странице / вывести json в котором каждый элемент - это:
-    - пост из файла posts.json.
-    - для каждой поста указано кол-во комментариев этого поста из файла comments.json
-
-    Формат ответа:
-    posts: [
-        {
-            id: <int>,
-            title: <str>,
-            body: <str>, 
-            author:	<str>,
-            created_at: <str>,
-            comments_count: <int>
-        }
-    ],
-    total_results: <int>
-
-    Порядок ключей словаря в ответе не важен
-    """
     posts, comments = data_loader()
-    output = {"body": "Social posts"}
+
+    comments_count = {}
+    for comment in comments:
+        try:
+            comments_count[comment['post_id']] += 1
+        except KeyError:
+            comments_count[comment['post_id']] = 1
+
+    result_posts = []
+    for post in posts:
+        result_posts.append({
+            "id": post['id'],
+            "title": post['title'],
+            "body": post['body'],
+            "author": post['author'],
+            "created_at": post['created_at'],
+            "comments_count": comments_count.get(post['id'], 0)
+        })
+
+    output = {"posts": result_posts,
+              "total_results": len(result_posts)}
 
     return jsonify(output)
 
 
 @app.route("/posts/<int:post_id>")
 def get_post(post_id):
-    """
-    На странице /posts/<post_id> вывести json, который должен содержать:
-    - пост с указанным в ссылке id
-    - список всех комментариев к новости
-
-    Отдавайте ошибку abort(404), если пост не существует.
-
-
-    Формат ответа:
-    id: <int>,
-    title: <str>,
-    body: <str>, 
-    author:	<str>,
-    created_at: <str>
-    comments: [
-        "user": <str>,
-        "post_id": <int>,
-        "comment": <str>,
-        "created_at": <str>
-    ]
-
-    Порядок ключей словаря в ответе не важен
-    """
     posts, comments = data_loader()
-    output = {"body": "Post: %d" % post_id}
 
-    return jsonify(output)
+    posts_dict = {post['id']: post for post in posts}
+    if posts_dict.get(post_id):
+        post = posts_dict[post_id]
+        response = {
+            "id": post['id'],
+            "title": post['title'],
+            "body": post['body'],
+            "author": post['author'],
+            "created_at": post['created_at'],
+            "comments": [comment for comment in comments if comment['post_id'] == post['id']]
+        }
+        return jsonify(response)
+    else:
+        return abort(404)
