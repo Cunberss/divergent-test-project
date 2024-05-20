@@ -28,7 +28,7 @@ def get_posts():
     for comment in comments:
         try:
             comments_count[comment['post_id']] += 1
-        except KeyError:
+        except KeyError:   # Либо проверить на наличие ключа через in
             comments_count[comment['post_id']] = 1
 
     result_posts = []
